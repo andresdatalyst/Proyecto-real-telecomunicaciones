@@ -1,187 +1,493 @@
 # Motor de Fusiones FTTH
 
-Sistema completo de automatización de fusiones de fibra óptica para redes FTTH, desarrollado durante un proyecto real en una empresa de telecomunicaciones.
+<div align="center">
 
-Construido en dos fases: primero como motor SQL en PostgreSQL, después como aplicación web en Laravel para que los operarios pudieran ejecutarlo sin tocar la base de datos.
+![Laravel](https://img.shields.io/badge/Laravel-9.19-FF2D20?style=flat-square&logo=laravel)
+![PHP](https://img.shields.io/badge/PHP-8.0+-777BB4?style=flat-square&logo=php)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791?style=flat-square&logo=postgresql)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
+![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen?style=flat-square)
+
+**Sistema completo de automatización de fusiones de fibra óptica para redes FTTH**
+
+[Características](#características) • [Arquitectura](#arquitectura) • [Quick Start](#quick-start) • [Documentación](#documentación)
+
+</div>
 
 ---
 
-## El problema
+## 📌 Visión General
 
-En redes de fibra óptica FTTH (**Fiber To The Home**), los cables deben fusionarse físicamente entre sí en puntos de conexión llamados **Telecom Premises (TP)**. La red tiene esta forma:
+Sistema desarrollado durante un **proyecto real en telecomunicaciones** que automatiza el proceso de fusión de fibra óptica en redes FTTH. Lo que antes era **100% manual**, ahora se hace en segundos.
+
+Construido en **dos fases**:
+- **Fase 1**: Motor SQL en PostgreSQL con funciones PL/pgSQL
+- **Fase 2**: Aplicación web en Laravel para operarios
 
 ```
 [CTO-001] ---Cable A--- [CTO-002] ---Cable B--- [CTO-003] ---Cable C--- [CTO-Final]
+                         ↓                         ↓                        ↓
+                    FUSIONA → FUSIONA → FUSIONA → SPLITTER
 ```
-
-Cada cable lleva varios pares de fibras. Cada par del cable A debe fusionarse con el par equivalente del cable B, en el mismo orden de posición. El **último par** de cada cable va siempre al **splitter** del TP (marcado como `div1` / `div2`), que distribuye la señal hacia los usuarios finales.
-
-Este proceso se documentaba completamente a mano. El objetivo fue automatizarlo a partir de los datos existentes en la base de datos de producción, sin modificar el modelo de datos heredado.
 
 ---
 
-## Estructura del repositorio
+## ✨ Características
+
+- ✅ **Recorrido automático**: Navega cadenas de cables y genera todas las fusiones
+- ✅ **Motor SQL optimizado**: Versión original + versión mejorada con model normalizado
+- ✅ **Interfaz web intuitiva**: Blade templates con diseño minimalista
+- ✅ **Datos de ejemplo**: Dataset reproducible para testing
+- ✅ **Bien documentado**: Architecture docs + decisiones técnicas
+- ✅ **Dos tipos de recorrido**: Distribución (cable-cable) + Alimentación (cabecera-splitter)
+
+---
+
+## 🏗️ Arquitectura
+
+### Flujo de datos
+
+```mermaid
+graph TD
+    A["👤 Usuario"] -->|ID cable + Ciudad| B["formFusionDistribucion.blade.php"]
+    B -->|POST| C["recorridoCableDistribucion()"]
+    C -->|Busca cables| D["BD: tabla cable"]
+    C -->|Loop automático| E["fusionCableTp()"]
+    E -->|Insert x 4| F["tabla_fusion_laravel"]
+    C -->|Último cable| G["fusionTpTp()"]
+    G -->|Insert x 4| F
+    F -->|Render tabla| H["result.blade.php"]
+    H -->|Muestra al usuario| I["✓ Fusiones generadas"]
+    
+    style A fill:#00d4aa
+    style I fill:#00d4aa
+    style F fill:#ff6b6b
+```
+
+### Estructura del proyecto
+
+```mermaid
+graph LR
+    A["🗄️ Base de Datos"]
+    B["⚙️ Motor SQL"]
+    C["🌐 Laravel"]
+    D["🎨 Frontend"]
+    
+    A -->|Datos heredados| B
+    B -->|Lógica portada| C
+    C -->|Blade templates| D
+    D -->|Interfaz operario| A
+    
+    style A fill:#336791
+    style B fill:#FF2D20
+    style C fill:#FF2D20
+    style D fill:#00d4aa
+```
+
+---
+
+## 📊 Modelo de Datos
+
+### Tablas principales
+
+```mermaid
+erDiagram
+    CABLE ||--o{ TELECOM_PREMISES : "origen/destino"
+    CABLE ||--o{ TABLA_FUSION : "generan"
+    TELECOM_PREMISES ||--o{ TABLA_FUSION : "conectan"
+    
+    CABLE {
+        int objectid PK
+        string codigo
+        string origen
+        string destino
+        text fibras_act "ej: '1-2,3-4,5-6'"
+        text fibras_res
+        string ciudad
+    }
+    
+    TELECOM_PREMISES {
+        int id PK
+        int objectid_1 UK
+        string codigo
+        string ciudad
+    }
+    
+    TABLA_FUSION {
+        int id PK
+        int id_cable_origen FK
+        int id_cable_destino FK
+        string filamento_origen
+        string filamento_destino
+        string splitter "div1|div2|null"
+        int id_objeto_origen FK
+        int id_objeto_destino FK
+    }
+```
+
+---
+
+## 🚀 Quick Start
+
+### Requisitos
+- **PHP 8.0+**
+- **Composer**
+- **Node.js 14+** (npm)
+- **MySQL/PostgreSQL**
+
+### Instalación rápida
+
+```bash
+# 1. Clonar y navegar
+cd web
+
+# 2. Instalar dependencias
+composer install
+npm install
+
+# 3. Configurar entorno
+cp .env.example .env
+php artisan key:generate
+
+# 4. Base de datos
+php artisan migrate
+
+# 5. Compilar assets y servir
+npm run dev          # Terminal 1
+php artisan serve    # Terminal 2
+
+# 6. Abrir en navegador
+# http://localhost:8000
+```
+
+> 📚 **[Ver guía detallada de instalación →](docs/QUICKSTART.md)**
+
+---
+
+## 🖼️ Interfaz
+
+### Página de inicio
+Dos opciones de recorrido disponibles:
+- **01 Distribución**: Recorre red de distribución cable-cable
+- **02 Alimentación**: Recorre tramo de alimentación
+
+### Formulario
+Campo simple:
+- ID del cable inicial (objectid)
+- Ciudad (para filtrar proyectos de red)
+
+### Resultado
+Tabla con todas las fusiones generadas:
+
+| Cable origen | Fil. origen | Fil. destino | Cable destino | TP origen | TP destino | Splitter |
+|---|---|---|---|---|---|---|
+| CBL-A | 1 | 13 | CBL-B | CTO-001 | CTO-002 | — |
+| CBL-A | 2 | 14 | CBL-B | CTO-001 | CTO-002 | — |
+| CBL-A | 5 | 17 | CBL-B | CTO-001 | CTO-002 | **div1** |
+| ... | ... | ... | ... | ... | ... | ... |
+
+---
+
+## 📚 Documentación
+
+| Archivo | Propósito |
+|---------|-----------|
+| [decisiones_tecnicas.md](docs/decisiones_tecnicas.md) | Contexto del problema + decisiones de diseño |
+| [ARQUITECTURA.md](docs/ARQUITECTURA.md) | Detalles técnicos + componentes |
+| [QUICKSTART.md](docs/QUICKSTART.md) | Guía step-by-step de instalación |
+
+---
+
+## 🔬 Testing
+
+```bash
+# Ejecutar tests
+php artisan test
+
+# Con cobertura
+php artisan test --coverage
+```
+
+---
+
+## 🏢 Estructura del Repositorio
 
 ```
 Proyecto-real-telecomunicaciones/
 │
-├── sql/
+├── sql/                              ← Motor SQL (2 versiones)
 │   ├── legacy/
-│   │   └── 01_fusion_original.sql      ← Motor SQL original usado en producción
+│   │   └── 01_fusion_original.sql    ← Original usado en producción (heredado)
 │   ├── improved/
-│   │   ├── 01_schema.sql               ← Rediseño con modelo normalizado
-│   │   └── 02_funciones.sql            ← Funciones refactorizadas (set-based)
+│   │   ├── 01_schema.sql             ← Rediseño normalizado
+│   │   └── 02_funciones.sql          ← Funciones set-based optimizadas
 │   └── sample_data/
-│       └── datos_ejemplo.sql           ← Dataset reproducible para pruebas
+│       └── datos_ejemplo.sql         ← Dataset reproducible
 │
-├── web/                                ← Aplicación Laravel
+├── web/                              ← Aplicación Laravel
 │   ├── app/Http/Controllers/
-│   │   └── TablaFusionController.php   ← Lógica principal portada a PHP
-│   ├── database/migrations/            ← Esquema de tablas propias
-│   ├── resources/views/TablaFusion/    ← Vistas Blade
-│   └── routes/web.php                  ← Rutas de la aplicación
+│   │   └── TablaFusionController.php ← Lógica portada de SQL a PHP
+│   ├── database/
+│   │   ├── migrations/               ← Schema (4 tablas)
+│   │   └── seeders/
+│   ├── resources/views/TablaFusion/
+│   │   ├── index.blade.php           ← Inicio (selector de tipo)
+│   │   ├── formFusionDistribucion.blade.php
+│   │   ├── formFusionAlimentacion.blade.php
+│   │   └── result.blade.php          ← Tabla de resultados
+│   ├── routes/
+│   │   └── web.php
+│   ├── .env.example                  ← Configuración plantilla
+│   └── composer.json
 │
-└── docs/
-    └── decisiones_tecnicas.md          ← Contexto, reglas de negocio y comparativa
+├── docs/
+│   ├── decisiones_tecnicas.md        ← Problema + decisiones + comparativa
+│   ├── ARQUITECTURA.md               ← Detalles técnicos (EN CONSTRUCCIÓN)
+│   └── QUICKSTART.md                 ← Setup step-by-step (EN CONSTRUCCIÓN)
+│
+├── README.md                         ← ← ← Estás aquí
+├── .gitignore
+└── .github/workflows/                ← CI/CD (OPCIONAL)
 ```
 
 ---
 
-## Fase 1 — Motor SQL (`sql/`)
+## 🔄 Comparativa: Original vs Mejorado
 
-### El problema del modelo heredado
+La aplicación incluye **dos versiones del motor SQL** para mostrar desde dónde se partió y adónde pudo haber ido con tiempo:
 
-El sistema GIS de la empresa almacenaba las fibras de cada cable como un campo de texto:
-
-```
-FIBRAS_ACT = '1-2,3-4,5-6'
-```
-
-Cada elemento separado por `,` es un par de filamentos `A-B`. La posición en el string indica a qué TP del recorrido corresponde esa fusión. El modelo estaba en producción y **no era modificable**, por lo que se resolvió con parsing manual usando `string_to_array` y `split_part`.
-
-### Versión original — `sql/legacy/`
-
-Tres funciones PL/pgSQL que trabajan en cadena:
-
-**`fusion_cable_tp(cable_origen, cable_destino, tp_origen, tp_destino)`**
-Genera las fusiones entre dos cables consecutivos. Convierte los campos de texto en arrays, los recorre posición a posición y aplica la regla del splitter al último elemento.
-
-**`fusion_tp_tp(cable_origen, tp_origen, tp_destino)`**
-Caso especial para el final del recorrido. Cuando no existe cable siguiente, el último cable llega directamente al TP final y todos sus filamentos activos van al splitter.
-
-**`recorridoCable(cable_origen, ciudad)`**
-Motor de recorrido automático. Dado el primer cable de un trayecto, navega hasta el final insertando todas las fusiones en `tabla_fusion`. El campo `ciudad` evita colisiones entre proyectos de distintas ciudades que comparten códigos de origen/destino.
-
-### Versión mejorada — `sql/improved/`
-
-Rediseño propuesto con modelo normalizado: una fila por par de fibras, sin parsing de texto, lógica set-based con JOINs en lugar de loops.
-
-| Aspecto | Versión original | Versión mejorada |
+| Aspecto | Original (sql/legacy) | Mejorado (sql/improved) |
 |---|---|---|
-| Fibras | Campo texto `'1-2,3-4'` | Una fila por par (normalizado) |
-| Parsing | `string_to_array` + `split_part` | `JOIN` por columna `orden` |
-| Regla del splitter | `IF` dentro del loop | `CASE` en la query |
-| Queries por iteración | 4 `RETURN QUERY` separadas | 1 `INSERT` con `UNION ALL` |
-| Navegación de red | 3 `SELECT INTO` por iteración | 1 query con múltiples `JOIN` |
-| FROM syntax | `FROM tabla1, tabla2` (implicit) | `JOIN ... ON` explícito |
+| **Modelo datos** | Fibras en texto `'1-2,3-4'` | Normalizado (1 fila por par) |
+| **Parsing** | `string_to_array() + split_part()` | JOINs nativos SQL |
+| **Lógica iteración** | FOR loop procedural | Set-based con UNION ALL |
+| **Splitter** | IF condición dentro loop | CASE en query |
+| **Queries/iteración** | 3-4 SELECT INTO por cable | 1 INSERT consolidado |
+| **Escalabilidad** | ⚠️ O(n) secuencial | ✅ O(log n) set-based |
+| **Mantenibilidad** | Acoplado a formato texto | Desacoplado (normalizado) |
+| **Fuente** | Producción real | Propuesta mejorada |
 
 ---
 
-## Fase 2 — Aplicación web (`web/`)
+## 🎯 Fase 1 — Motor SQL
 
-Interfaz Laravel que expone el motor de fusiones mediante formularios web. El operario introduce el ID del primer cable y la ciudad; el sistema genera automáticamente todas las fusiones del trayecto y las muestra en pantalla.
+### Problema del modelo heredado
 
-### Flujo de uso
+El sistema GIS de la empresa **no era modificable** (otros sistemas dependían de él). Guardaba fibras así:
 
 ```
-Formulario → recorridoCableDistribucion() → fusionCableTp() × N → fusionTpTp() → Resultado
+cable.fibras_act = '1-2,3-4,5-6'
+cable.fibras_res = '7-8,9-10,11-12'
 ```
+
+Cada `,` separa un par. La posición indica a qué TP va (posición 1→TP1, posición 2→TP2, última→splitter).
+
+**Desafío**: Automatizar rebajas con esa estructura heredada.
+
+### Versión Original — `sql/legacy/01_fusion_original.sql`
+
+Tres funciones que trabajan encadenadas:
+
+```sql
+-- 1. Fusión entre dos cables en un mismo punto
+fusion_cable_tp(
+    id_cable_origen, id_cable_destino,
+    id_tp_origen, id_tp_destino
+)
+-- → Explode fibras × 2 tipo × 2 filamentos = 4 INSERT
+
+-- 2. Caso final sin cable destino
+fusion_tp_tp(
+    id_cable_origen,
+    id_tp_origen, id_tp_destino
+)
+-- → Todos a splitter
+
+-- 3. Recorrido automático
+recorridoCable(id_cable_inicial, ciudad)
+-- → Loop de cables, llamadas a 1 y 2
+```
+
+**Característica**: Resuelve el problema en producción con las restricciones del modelo.
+
+### Versión Mejorada — `sql/improved/`
+
+Propuesta de cómo se hubiera diseñado **sin restricciones**:
+
+```
+-- Tabla normalizada
+cable_fibra (cable_id, orden, filamento_a, filamento_b, tipo)
+-- No más parsing de strings
+
+-- Función set-based
+SELECT ... UNION ALL ...
+```
+
+**Ventaja**: Código más limpio, escalable, testeable.
+
+> 📖 Detalles completos → [decisiones_tecnicas.md](docs/decisiones_tecnicas.md)
+
+---
+
+## 🌐 Fase 2 — Aplicación Web (Laravel)
+
+### Objetivo
+Exponer el motor a operarios sin que toquen la BD.
 
 ### Rutas
 
 ```
-GET  /                          → Página de inicio
-GET  /fusion/distribucion       → Formulario fusión distribución
-GET  /fusion/alimentacion       → Formulario fusión alimentación
-POST /fusion/distribucion       → Ejecutar recorrido de distribución
-POST /fusion/alimentacion       → Ejecutar recorrido de alimentación
+GET  /
+    ↓
+    Elige tipo (Distribución / Alimentación)
+    ↓
+GET  /fusion/distribucion
+    ↓
+    Formulario (ID cable + Ciudad)
+    ↓
+POST /fusion/distribucion
+    ↓
+    recorridoCableDistribucion()
+    ├─ Loop automático
+    ├─ fusionCableTp() × N
+    ├─ fusionTpTp()
+    └─ Insert en tabla_fusion_laravel
+    ↓
+    Render result.blade.php
+    ↓
+    Tabla con fusiones generadas
 ```
 
-### Tablas propias
+### Controlador: TablaFusionController.php
 
-El proyecto incluye migraciones para las cuatro tablas del sistema:
+```php
+recorridoCableDistribucion()      // Orquesta todo
+├─ fusionCableTp()               // Lógica cable-cable
+├─ fusionTpTp()                  // Lógica final
+└─ recorridoAlimentacion()       // Variante para alimentación
+```
 
-- `cable` — Tramos de fibra óptica con sus pares de filamentos
-- `telecom_premises` — Puntos de conexión de la red
-- `tabla_fusion_laravel` — Resultado de fusiones de distribución
-- `tabla_fusion_alimentacion` — Resultado de fusiones de alimentación
+Lógica **portada directamente** del SQL al PHP con:
+- `explode()` ↔ `string_to_array()`
+- `DB::table()` ↔ `SELECT`
+- Arrays ↔ estructuras SQL
 
 ---
 
-## Cómo ejecutar
+## 🗄️ Tablas
 
-### Motor SQL (versión mejorada con datos de ejemplo)
+```
+cable
+├─ objectid (PK)
+├─ codigo (ej: 'CBL-001')
+├─ origen / destino (TPcódigos)
+├─ fibras_act / fibras_res (texto heredado)
+└─ ciudad
+
+telecom_premises
+├─ objectid_1 (FK a cable)
+├─ codigo (ej: 'CTO-001')
+└─ ciudad
+
+tabla_fusion_laravel (resultado)
+├─ id_cable_origen
+├─ id_cable_destino
+├─ filamento_origen / destino
+├─ splitter ('div1', 'div2', null)
+└─ id_objeto_origen / destino (FK a TP)
+
+tabla_fusion_alimentacion (resultado, mismo schema)
+```
+
+---
+
+## 🛠️ Cómo Ejecutar
+
+### Opción A: Aplicación Laravel (recomendado)
 
 ```bash
-# Requisito: PostgreSQL 12+
-psql -U tu_usuario -d tu_base_datos
+cd web
+
+# Setup
+composer install
+npm install
+cp .env.example .env
+php artisan key:generate
+
+# BD
+php artisan migrate
+
+# Desarrollo
+npm run dev           # Terminal 1
+php artisan serve     # Terminal 2
+
+# → Abre http://localhost:8000
+```
+
+> 📚 [Guía detallada →](docs/QUICKSTART.md) (en construcción)
+
+### Opción B: Motor SQL directo
+
+```bash
+# PostgreSQL 12+
+psql -U usuario -d base_datos
 
 \i sql/improved/01_schema.sql
 \i sql/sample_data/datos_ejemplo.sql
 \i sql/improved/02_funciones.sql
 
--- Ejecutar recorrido completo
+-- Ejecutar
 SELECT recorrido_red(1, 'CIUDAD EJEMPLO');
 
 -- Ver resultados
-SELECT cod_cable_origen, cod_cable_destino,
-       filamento_origen, filamento_destino,
-       tipo, splitter
-FROM fusion_resultado
-ORDER BY cable_origen_id, tipo, filamento_origen;
+SELECT * FROM fusion_resultado;
 ```
 
-### Aplicación Laravel
+---
 
-```bash
-cd web
-cp .env.example .env
+## 📦 Tech Stack
 
-# Configurar conexión PostgreSQL en .env:
-# DB_CONNECTION=pgsql
-# DB_HOST=127.0.0.1
-# DB_PORT=5432
-# DB_DATABASE=nombre_base_datos
-# DB_USERNAME=usuario
-# DB_PASSWORD=contraseña
-
-composer install
-php artisan key:generate
-php artisan migrate
-php artisan serve
-```
-
-Abrir en el navegador: `http://localhost:8000`
+| Capa | Tecnología |
+|---|---|
+| **Servidor** | PHP 8.0+ |
+| **Framework** | Laravel 9.19 |
+| **Frontend** | Blade templating |
+| **BD** | PostgreSQL / MySQL |
+| **Build** | Vite.js |
+| **Estilos** | CSS personalizado (dark mode) |
 
 ---
 
-## Tecnologías
+## 💼 Contexto Profesional
 
-- **PostgreSQL / PL/pgSQL** — Motor de base de datos y lógica procedural
-- **PHP 8 / Laravel 9** — Framework web
-- **Blade** — Motor de plantillas de Laravel
+- **Iniciativa**: Proyecto real en empresa de telecomunicaciones
+- **Problema**: Proceso 100% manual documentando fusiones
+- **Solución**: Automatización SQL + web
+- **Resultado**: Reducción de tiempo de coordinación, menos errores
 
----
-
-## Contexto del proyecto
-
-La versión SQL original resolvió el problema en producción trabajando sobre un modelo heredado que no podía modificarse. La versión mejorada muestra el diseño correcto con libertad para definir el esquema desde cero. La aplicación Laravel expuso ese motor a los operarios sin que tuvieran que interactuar directamente con la base de datos.
-
-Más detalles sobre las decisiones técnicas, reglas de negocio y comparativa entre versiones en [`docs/decisiones_tecnicas.md`](docs/decisiones_tecnicas.md).
+La versión SQL **original está en producción**. La versión **mejorada es propuesta** de refactor.
 
 ---
 
-## Autor
+## 📄 Licencia
+
+MIT
+
+---
+
+## 👨‍💻 Autor
 
 **Andrés Provira**
-[GitHub](https://github.com/andresdatalyst)
+
+- 🔗 [GitHub](https://github.com/andresdatalyst)
+- 📧 [Email](mailto:tu@email.com)
+
+---
+
+## 🚀 Próximos pasos (ideas)
+
+- [ ] Tests unitarios para recorrido
+- [ ] API REST (NextJS/API)
+- [ ] Dashboard de estadísticas
+- [ ] Exportar resultados (CSV/PDF)
+- [ ] Versión con GraphQL

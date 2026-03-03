@@ -1,0 +1,41 @@
+# Laravel / PHP
+/web/vendor/
+/web/.env
+/web/.env.local
+/web/.env.*.local
+/web/storage/logs/
+/web/storage/framework/
+/web/bootstrap/cache/
+/web/public/storage
+/web/node_modules/
+/web/dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# npm
+/web/npm-debug.log
+/web/yarn-error.log
+/web/package-lock.json
+/web/yarn.lock
+
+# Vite
+/web/.vite
+
+# Testing
+/web/coverage/
+/web/.phpunit.result.cache
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Project-specific
+*.bak
+*.tmp
+.env.testing
